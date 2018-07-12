@@ -15,6 +15,7 @@
 #include "flutter/fml/memory/weak_ptr.h"
 #include "flutter/fml/thread.h"
 #include "flutter/lib/ui/semantics/semantics_node.h"
+#include "flutter/lib/ui/semantics/custom_accessibility_action.h"
 #include "flutter/lib/ui/window/platform_message.h"
 #include "flutter/runtime/service_protocol.h"
 #include "flutter/shell/common/animator.h"
@@ -41,9 +42,22 @@ class Shell final : public PlatformView::Delegate,
  public:
   template <class T>
   using CreateCallback = std::function<std::unique_ptr<T>(Shell&)>;
+
+  // Create a shell with the given task runners and settings. The isolate
+  // snapshot will be shared with the snapshot of the service isolate.
   static std::unique_ptr<Shell> Create(
       blink::TaskRunners task_runners,
       blink::Settings settings,
+      CreateCallback<PlatformView> on_create_platform_view,
+      CreateCallback<Rasterizer> on_create_rasterizer);
+
+  // Creates a shell with the given task runners and settings. The isolate
+  // snapshot is specified upfront.
+  static std::unique_ptr<Shell> Create(
+      blink::TaskRunners task_runners,
+      blink::Settings settings,
+      fxl::RefPtr<blink::DartSnapshot> isolate_snapshot,
+      fxl::RefPtr<blink::DartSnapshot> shared_snapshot,
       CreateCallback<PlatformView> on_create_platform_view,
       CreateCallback<Rasterizer> on_create_rasterizer);
 
@@ -59,7 +73,7 @@ class Shell final : public PlatformView::Delegate,
 
   fml::WeakPtr<PlatformView> GetPlatformView();
 
-  const blink::DartVM& GetDartVM() const;
+  blink::DartVM& GetDartVM() const;
 
   bool IsSetup() const;
 
@@ -92,6 +106,8 @@ class Shell final : public PlatformView::Delegate,
   static std::unique_ptr<Shell> CreateShellOnPlatformThread(
       blink::TaskRunners task_runners,
       blink::Settings settings,
+      fxl::RefPtr<blink::DartSnapshot> isolate_snapshot,
+      fxl::RefPtr<blink::DartSnapshot> shared_snapshot,
       Shell::CreateCallback<PlatformView> on_create_platform_view,
       Shell::CreateCallback<Rasterizer> on_create_rasterizer);
 
@@ -168,7 +184,8 @@ class Shell final : public PlatformView::Delegate,
 
   // |shell::Engine::Delegate|
   void OnEngineUpdateSemantics(const Engine& engine,
-                               blink::SemanticsNodeUpdates update) override;
+                               blink::SemanticsNodeUpdates update,
+                               blink::CustomAccessibilityActionUpdates actions) override;
 
   // |shell::Engine::Delegate|
   void OnEngineHandlePlatformMessage(

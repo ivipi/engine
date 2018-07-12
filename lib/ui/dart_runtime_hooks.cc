@@ -47,6 +47,7 @@ namespace blink {
 
 #define BUILTIN_NATIVE_LIST(V) \
   V(Logger_PrintString, 1)     \
+  V(SaveCompilationTrace, 0)   \
   V(ScheduleMicrotask, 1)
 
 BUILTIN_NATIVE_LIST(DECLARE_FUNCTION);
@@ -88,9 +89,9 @@ static void InitDartInternal(Dart_Handle builtin_library, bool is_ui_isolate) {
 }
 
 static void InitDartCore(Dart_Handle builtin, const std::string& script_uri) {
-  DART_CHECK_VALID(
-      Dart_SetField(builtin, ToDart("_baseURL"), ToDart(script_uri)));
-  Dart_Handle get_base_url = GetClosure(builtin, "_getGetBaseURLClosure");
+  Dart_Handle io_lib = Dart_LookupLibrary(ToDart("dart:io"));
+  Dart_Handle get_base_url =
+      Dart_Invoke(io_lib, ToDart("_getUriBaseClosure"), 0, NULL);
   Dart_Handle core_library = Dart_LookupLibrary(ToDart("dart:core"));
   DART_CHECK_VALID(
       Dart_SetField(core_library, ToDart("_uriBaseClosure"), get_base_url));
@@ -145,13 +146,13 @@ void Logger_PrintString(Dart_NativeArguments args) {
   std::stringstream stream;
   const auto& logger_prefix = UIDartState::Current()->logger_prefix();
 
-#if !OS(ANDROID)
+#if !OS_ANDROID
   // Prepend all logs with the isolate debug name except on Android where that
   // prefix is specified in the log tag.
   if (logger_prefix.size() > 0) {
     stream << logger_prefix << ": ";
   }
-#endif  // !OS(ANDROID)
+#endif  // !OS_ANDROID
 
   // Append the log buffer obtained from Dart code.
   {
@@ -197,6 +198,24 @@ void Logger_PrintString(Dart_NativeArguments args) {
                               reinterpret_cast<const uint8_t*>(chars), length);
     Dart_ServiceSendDataEvent("Stdout", "WriteEvent", newline, sizeof(newline));
   }
+}
+
+void SaveCompilationTrace(Dart_NativeArguments args) {
+  uint8_t* buffer = nullptr;
+  intptr_t length = 0;
+  Dart_Handle result = Dart_SaveCompilationTrace(&buffer, &length);
+  if (Dart_IsError(result)) {
+    Dart_SetReturnValue(args, result);
+    return;
+  }
+
+  result = Dart_NewExternalTypedData(Dart_TypedData_kUint8, buffer, length);
+  if (Dart_IsError(result)) {
+    Dart_SetReturnValue(args, result);
+    return;
+  }
+
+  Dart_SetReturnValue(args, result);
 }
 
 void ScheduleMicrotask(Dart_NativeArguments args) {

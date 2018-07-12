@@ -28,16 +28,21 @@ void MessageDataFinalizer(void* isolate_callback_data,
 
 Dart_Handle WrapByteData(std::vector<uint8_t> data) {
   if (data.size() < kMessageCopyThreshold) {
-    return ToTypedData(Dart_TypedData_kUint8, data);
+    return ToByteData(data);
   } else {
     std::vector<uint8_t>* heap_data = new std::vector<uint8_t>(std::move(data));
-    Dart_Handle data_handle = Dart_NewExternalTypedData(
-        Dart_TypedData_kUint8, heap_data->data(), heap_data->size());
+    Dart_Handle data_handle = Dart_NewExternalTypedDataWithFinalizer(
+        Dart_TypedData_kByteData, heap_data->data(), heap_data->size(),
+        heap_data, heap_data->size(), MessageDataFinalizer);
     DART_CHECK_VALID(data_handle);
-    Dart_NewWeakPersistentHandle(data_handle, heap_data, heap_data->size(),
-                                 MessageDataFinalizer);
     return data_handle;
   }
+}
+
+Dart_Handle WrapByteData(std::unique_ptr<fml::Mapping> mapping) {
+  std::vector<uint8_t> data(mapping->GetSize());
+  memcpy(data.data(), mapping->GetMapping(), mapping->GetSize());
+  return WrapByteData(std::move(data));
 }
 
 }  // anonymous namespace
@@ -57,7 +62,7 @@ PlatformMessageResponseDart::~PlatformMessageResponseDart() {
   }
 }
 
-void PlatformMessageResponseDart::Complete(std::vector<uint8_t> data) {
+void PlatformMessageResponseDart::Complete(std::unique_ptr<fml::Mapping> data) {
   if (callback_.is_empty())
     return;
   FXL_DCHECK(!is_complete_);

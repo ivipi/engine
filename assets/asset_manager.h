@@ -10,14 +10,13 @@
 #include <string>
 
 #include "flutter/assets/asset_resolver.h"
-#include "lib/fxl/files/unique_fd.h"
-#include "lib/fxl/macros.h"
-#include "lib/fxl/memory/ref_counted.h"
+#include "flutter/fml/macros.h"
+#include "flutter/fml/memory/ref_counted.h"
 
 namespace blink {
 
 class AssetManager final : public AssetResolver,
-                           public fxl::RefCountedThreadSafe<AssetManager> {
+                           public fml::RefCountedThreadSafe<AssetManager> {
  public:
   void PushFront(std::unique_ptr<AssetResolver> resolver);
 
@@ -27,8 +26,8 @@ class AssetManager final : public AssetResolver,
   bool IsValid() const override;
 
   // |blink::AssetResolver|
-  bool GetAsBuffer(const std::string& asset_name,
-                   std::vector<uint8_t>* data) const override;
+  std::unique_ptr<fml::Mapping> GetAsMapping(
+      const std::string& asset_name) const override;
 
  private:
   std::deque<std::unique_ptr<AssetResolver>> resolvers_;
@@ -37,9 +36,9 @@ class AssetManager final : public AssetResolver,
 
   ~AssetManager();
 
-  FXL_DISALLOW_COPY_AND_ASSIGN(AssetManager);
-  FRIEND_MAKE_REF_COUNTED(AssetManager);
-  FRIEND_REF_COUNTED_THREAD_SAFE(AssetManager);
+  FML_DISALLOW_COPY_AND_ASSIGN(AssetManager);
+  FML_FRIEND_MAKE_REF_COUNTED(AssetManager);
+  FML_FRIEND_REF_COUNTED_THREAD_SAFE(AssetManager);
 };
 
 }  // namespace blink

@@ -33,7 +33,7 @@ void ClipPathLayer::UpdateScene(SceneUpdateContext& context) {
   // TODO(MZ-140): Must be able to specify paths as shapes to nodes.
   //               Treating the shape as a rectangle for now.
   auto bounds = clip_path_.getBounds();
-  scenic_lib::Rectangle shape(context.session(),  // session
+  scenic::Rectangle shape(context.session(),  // session
                               bounds.width(),     //  width
                               bounds.height()     //  height
   );
@@ -48,7 +48,7 @@ void ClipPathLayer::Paint(PaintContext& context) const {
   TRACE_EVENT0("flutter", "ClipPathLayer::Paint");
   FXL_DCHECK(needs_painting());
 
-  Layer::AutoSaveLayer save(context, paint_bounds(), nullptr);
+  SkAutoCanvasRestore save(&context.canvas, true);
   context.canvas.clipPath(clip_path_, true);
   PaintChildren(context);
 }

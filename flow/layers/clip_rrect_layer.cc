@@ -25,7 +25,7 @@ void ClipRRectLayer::UpdateScene(SceneUpdateContext& context) {
   FXL_DCHECK(needs_system_composite());
 
   // TODO(MZ-137): Need to be able to express the radii as vectors.
-  scenic_lib::RoundedRectangle shape(
+  scenic::RoundedRectangle shape(
       context.session(),                                   // session
       clip_rrect_.width(),                                 //  width
       clip_rrect_.height(),                                //  height
@@ -46,7 +46,7 @@ void ClipRRectLayer::Paint(PaintContext& context) const {
   TRACE_EVENT0("flutter", "ClipRRectLayer::Paint");
   FXL_DCHECK(needs_painting());
 
-  Layer::AutoSaveLayer save(context, paint_bounds(), nullptr);
+  SkAutoCanvasRestore save(&context.canvas, true);
   context.canvas.clipRRect(clip_rrect_, true);
   PaintChildren(context);
 }

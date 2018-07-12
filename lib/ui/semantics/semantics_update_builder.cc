@@ -17,8 +17,9 @@ static void SemanticsUpdateBuilder_constructor(Dart_NativeArguments args) {
 
 IMPLEMENT_WRAPPERTYPEINFO(ui, SemanticsUpdateBuilder);
 
-#define FOR_EACH_BINDING(V)             \
-  V(SemanticsUpdateBuilder, updateNode) \
+#define FOR_EACH_BINDING(V)               \
+  V(SemanticsUpdateBuilder, updateNode)   \
+  V(SemanticsUpdateBuilder, updateCustomAction) \
   V(SemanticsUpdateBuilder, build)
 
 FOR_EACH_BINDING(DART_NATIVE_CALLBACK)
@@ -52,9 +53,10 @@ void SemanticsUpdateBuilder::updateNode(int id,
                                         std::string increasedValue,
                                         std::string decreasedValue,
                                         int textDirection,
-                                        int hitTestPosition,
                                         const tonic::Float64List& transform,
-                                        const tonic::Int32List& children) {
+                                        const tonic::Int32List& childrenInTraversalOrder,
+                                        const tonic::Int32List& childrenInHitTestOrder,
+                                        const tonic::Int32List& localContextActions) {
   SemanticsNode node;
   node.id = id;
   node.flags = flags;
@@ -71,15 +73,26 @@ void SemanticsUpdateBuilder::updateNode(int id,
   node.increasedValue = increasedValue;
   node.decreasedValue = decreasedValue;
   node.textDirection = textDirection;
-  node.hitTestPosition = hitTestPosition;
   node.transform.setColMajord(transform.data());
-  node.children = std::vector<int32_t>(
-      children.data(), children.data() + children.num_elements());
+  node.childrenInTraversalOrder = std::vector<int32_t>(
+      childrenInTraversalOrder.data(), childrenInTraversalOrder.data() + childrenInTraversalOrder.num_elements());
+  node.childrenInHitTestOrder = std::vector<int32_t>(
+      childrenInHitTestOrder.data(), childrenInHitTestOrder.data() + childrenInHitTestOrder.num_elements());
+  node.customAccessibilityActions = std::vector<int32_t>(
+      localContextActions.data(), localContextActions.data() + localContextActions.num_elements());
   nodes_[id] = node;
 }
 
+void SemanticsUpdateBuilder::updateCustomAction(int id,
+                                                std::string label) {
+  CustomAccessibilityAction action;
+  action.id = id;
+  action.label = label;
+  actions_[id] = action;
+}
+
 fxl::RefPtr<SemanticsUpdate> SemanticsUpdateBuilder::build() {
-  return SemanticsUpdate::create(std::move(nodes_));
+  return SemanticsUpdate::create(std::move(nodes_), std::move(actions_));
 }
 
 }  // namespace blink

@@ -20,12 +20,10 @@ class DartLibraryNatives;
 }  // namespace tonic
 
 namespace blink {
+class FontCollection;
 class Scene;
 
 Dart_Handle ToByteData(const std::vector<uint8_t>& buffer);
-
-Dart_Handle ToTypedData(Dart_TypedData_Type data_type,
-                        const std::vector<uint8_t>& buffer);
 
 class WindowClient {
  public:
@@ -34,6 +32,7 @@ class WindowClient {
   virtual void Render(Scene* scene) = 0;
   virtual void UpdateSemantics(SemanticsUpdate* update) = 0;
   virtual void HandlePlatformMessage(fxl::RefPtr<PlatformMessage> message) = 0;
+  virtual FontCollection& GetFontCollection() = 0;
 
  protected:
   virtual ~WindowClient();

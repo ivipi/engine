@@ -5,22 +5,20 @@
 package io.flutter.plugin.platform;
 
 import android.app.Activity;
-import android.content.ClipboardManager;
 import android.content.ClipData;
-import android.content.ClipDescription;
+import android.content.ClipboardManager;
 import android.content.Context;
-import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.os.Build;
+import android.util.Log;
 import android.view.HapticFeedbackConstants;
 import android.view.SoundEffectConstants;
 import android.view.View;
-
+import android.view.Window;
 import io.flutter.plugin.common.ActivityLifecycleListener;
+import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
-import io.flutter.plugin.common.MethodCall;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -30,6 +28,7 @@ import org.json.JSONObject;
  */
 public class PlatformPlugin implements MethodCallHandler, ActivityLifecycleListener {
     private final Activity mActivity;
+    private JSONObject mCurrentTheme;
     public static final int DEFAULT_SYSTEM_UI = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
             | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
     private static final String kTextPlainFormat = "text/plain";
@@ -60,7 +59,7 @@ public class PlatformPlugin implements MethodCallHandler, ActivityLifecycleListe
                 setSystemChromeEnabledSystemUIOverlays((JSONArray) arguments);
                 result.success(null);
             } else if (method.equals("SystemChrome.setSystemUIOverlayStyle")) {
-                setSystemChromeSystemUIOverlayStyle((String) arguments);
+                setSystemChromeSystemUIOverlayStyle((JSONObject) arguments);
                 result.success(null);
             } else if (method.equals("SystemNavigator.pop")) {
                 popSystemNavigator();
@@ -218,14 +217,66 @@ public class PlatformPlugin implements MethodCallHandler, ActivityLifecycleListe
         updateSystemUiOverlays();
     }
 
-    private void updateSystemUiOverlays() {
+    private void updateSystemUiOverlays(){
         mActivity.getWindow().getDecorView().setSystemUiVisibility(mEnabledOverlays);
+        if (mCurrentTheme != null) {
+            setSystemChromeSystemUIOverlayStyle(mCurrentTheme);
+        }
     }
 
-    private void setSystemChromeSystemUIOverlayStyle(String style) {
-        // You can change the navigation bar color (including translucent colors)
-        // in Android, but you can't change the color of the navigation buttons,
-        // so LIGHT vs DARK effectively isn't supported in Android.
+    private void setSystemChromeSystemUIOverlayStyle(JSONObject message) {
+        Window window = mActivity.getWindow();
+        View view = window.getDecorView();
+        int flags = view.getSystemUiVisibility();
+        try {
+            // You can change the navigation bar color (including translucent colors)
+            // in Android, but you can't change the color of the navigation buttons until Android O.
+            // LIGHT vs DARK effectively isn't supported until then.
+            // Build.VERSION_CODES.O
+            if (Build.VERSION.SDK_INT >= 26) {
+                if (!message.isNull("systemNavigationBarIconBrightness")) {
+                    String systemNavigationBarIconBrightness = message.getString("systemNavigationBarIconBrightness");
+                    switch (systemNavigationBarIconBrightness) {
+                        case "Brightness.dark":
+                            //View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+                            flags |= 0x10;
+                            break;
+                        case "Brightness.light":
+                            flags &= ~0x10;
+                            break;
+                    }
+                }
+                if (!message.isNull("systemNavigationBarColor")) {
+                    window.setNavigationBarColor(message.getInt("systemNavigationBarColor"));
+                }
+            }
+            // Build.VERSION_CODES.M
+            if (Build.VERSION.SDK_INT >= 23) {
+                if (!message.isNull("statusBarIconBrightness")) {
+                    String statusBarIconBrightness = message.getString("statusBarIconBrightness");
+                    switch (statusBarIconBrightness) {
+                        case "Brightness.dark":
+                            // View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                            flags |= 0x2000;
+                            break;
+                        case "Brightness.light":
+                            flags &= ~0x2000;
+                            break;
+                    }
+                }
+                if (!message.isNull("statusBarColor")) {
+                    window.setStatusBarColor(message.getInt("statusBarColor"));
+                }
+            }
+            if (!message.isNull("systemNavigationBarDividerColor")) {
+                // Not availible until Android P.
+                // window.setNavigationBarDividerColor(systemNavigationBarDividerColor);
+            }
+            view.setSystemUiVisibility(flags);
+            mCurrentTheme = message;
+        } catch (JSONException err) {
+            Log.i("PlatformPlugin", err.toString());
+        }
     }
 
     private void popSystemNavigator() {

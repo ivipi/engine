@@ -11,7 +11,6 @@ import android.content.res.Configuration;
 import android.os.Bundle;
 import io.flutter.app.FlutterActivityDelegate.ViewFactory;
 import io.flutter.plugin.common.PluginRegistry;
-import io.flutter.plugin.common.PluginRegistry.Registrar;
 import io.flutter.view.FlutterNativeView;
 import io.flutter.view.FlutterView;
 
@@ -61,6 +60,11 @@ public class FlutterActivity extends Activity implements FlutterView.Provider, P
     }
 
     @Override
+    public boolean retainFlutterNativeView() {
+        return false;
+    }
+
+    @Override
     public final boolean hasPlugin(String key) {
         return pluginRegistry.hasPlugin(key);
     }
@@ -79,6 +83,12 @@ public class FlutterActivity extends Activity implements FlutterView.Provider, P
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         eventDelegate.onCreate(savedInstanceState);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        eventDelegate.onStart();
     }
 
     @Override

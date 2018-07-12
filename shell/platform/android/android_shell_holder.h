@@ -41,7 +41,7 @@ class AndroidShellHolder {
   Rasterizer::Screenshot Screenshot(Rasterizer::ScreenshotType type,
                                     bool base64_encode);
 
-  void UpdateAssetManager(fxl::RefPtr<blink::AssetManager> asset_manager);
+  void UpdateAssetManager(fml::RefPtr<blink::AssetManager> asset_manager);
 
  private:
   const blink::Settings settings_;
@@ -50,6 +50,9 @@ class AndroidShellHolder {
   ThreadHost thread_host_;
   std::unique_ptr<Shell> shell_;
   bool is_valid_ = false;
+  pthread_key_t thread_destruct_key_;
+
+  static void ThreadDestructCallback(void* value);
 
   FXL_DISALLOW_COPY_AND_ASSIGN(AndroidShellHolder);
 };

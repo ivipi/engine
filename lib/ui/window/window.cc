@@ -98,6 +98,7 @@ void RespondToPlatformMessage(Dart_Handle window,
     UIDartState::Current()->window()->CompletePlatformMessageEmptyResponse(
         response_id);
   } else {
+    // TODO(engine): Avoid this copy.
     const uint8_t* buffer = static_cast<const uint8_t*>(data.data());
     UIDartState::Current()->window()->CompletePlatformMessageResponse(
         response_id,
@@ -112,16 +113,8 @@ void _RespondToPlatformMessage(Dart_NativeArguments args) {
 }  // namespace
 
 Dart_Handle ToByteData(const std::vector<uint8_t>& buffer) {
-  return ToTypedData(Dart_TypedData_kByteData, buffer);
-}
-
-Dart_Handle ToTypedData(Dart_TypedData_Type data_type,
-                        const std::vector<uint8_t>& buffer) {
-  FXL_DCHECK(data_type == Dart_TypedData_kByteData ||
-             data_type == Dart_TypedData_kInt8 ||
-             data_type == Dart_TypedData_kUint8);
-
-  Dart_Handle data_handle = Dart_NewTypedData(data_type, buffer.size());
+  Dart_Handle data_handle =
+      Dart_NewTypedData(Dart_TypedData_kByteData, buffer.size());
   if (Dart_IsError(data_handle))
     return data_handle;
 
@@ -157,16 +150,16 @@ void Window::UpdateWindowMetrics(const ViewportMetrics& metrics) {
       library_.value(), "_updateWindowMetrics",
       {
           ToDart(metrics.device_pixel_ratio),
-          ToDart(static_cast<double>(metrics.physical_width)),
-          ToDart(static_cast<double>(metrics.physical_height)),
-          ToDart(static_cast<double>(metrics.physical_padding_top)),
-          ToDart(static_cast<double>(metrics.physical_padding_right)),
-          ToDart(static_cast<double>(metrics.physical_padding_bottom)),
-          ToDart(static_cast<double>(metrics.physical_padding_left)),
-          ToDart(static_cast<double>(metrics.physical_view_inset_top)),
-          ToDart(static_cast<double>(metrics.physical_view_inset_right)),
-          ToDart(static_cast<double>(metrics.physical_view_inset_bottom)),
-          ToDart(static_cast<double>(metrics.physical_view_inset_left)),
+          ToDart(metrics.physical_width),
+          ToDart(metrics.physical_height),
+          ToDart(metrics.physical_padding_top),
+          ToDart(metrics.physical_padding_right),
+          ToDart(metrics.physical_padding_bottom),
+          ToDart(metrics.physical_padding_left),
+          ToDart(metrics.physical_view_inset_top),
+          ToDart(metrics.physical_view_inset_right),
+          ToDart(metrics.physical_view_inset_bottom),
+          ToDart(metrics.physical_view_inset_left),
       });
 }
 
@@ -296,7 +289,7 @@ void Window::CompletePlatformMessageResponse(int response_id,
     return;
   auto response = std::move(it->second);
   pending_responses_.erase(it);
-  response->Complete(std::move(data));
+  response->Complete(std::make_unique<fml::DataMapping>(std::move(data)));
 }
 
 void Window::RegisterNatives(tonic::DartLibraryNatives* natives) {

@@ -11,18 +11,11 @@ import android.os.Bundle;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
-
 import io.flutter.util.PathUtils;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * A class to intialize the Flutter engine.
@@ -71,16 +64,13 @@ public class FlutterMain {
     private static final String DEFAULT_PLATFORM_DILL = "platform.dill";
     private static final String DEFAULT_FLUTTER_ASSETS_DIR = "flutter_assets";
 
-    private static final String MANIFEST = "flutter.yaml";
+    // Assets that are shared among all Flutter apps within an APK.
+    private static final String SHARED_ASSET_DIR = "flutter_shared";
+    private static final String SHARED_ASSET_ICU_DATA = "icudtl.dat";
 
     private static String fromFlutterAssets(String filePath) {
         return sFlutterAssetsDir + File.separator + filePath;
     }
-
-    private static final Set<String> SKY_RESOURCES = ImmutableSetBuilder.<String>newInstance()
-        .add("icudtl.dat")
-        .add(MANIFEST)
-        .build();
 
     // Mutable because default values can be overridden via config properties
     private static String sAotSharedLibraryPath = DEFAULT_AOT_SHARED_LIBRARY_PATH;
@@ -94,9 +84,10 @@ public class FlutterMain {
 
     private static boolean sInitialized = false;
     private static ResourceExtractor sResourceExtractor;
-    private static boolean sIsPrecompiled;
+    private static boolean sIsPrecompiledAsBlobs;
     private static boolean sIsPrecompiledAsSharedLibrary;
     private static Settings sSettings;
+    private static String sIcuDataPath;
 
     private static final class ImmutableSetBuilder<T> {
         static <T> ImmutableSetBuilder<T> newInstance() {
@@ -189,6 +180,9 @@ public class FlutterMain {
         if (Looper.myLooper() != Looper.getMainLooper()) {
           throw new IllegalStateException("ensureInitializationComplete must be called on the main thread");
         }
+        if (sSettings == null) {
+          throw new IllegalStateException("ensureInitializationComplete must be called after startInitialization");
+        }
         if (sInitialized) {
             return;
         }
@@ -196,24 +190,28 @@ public class FlutterMain {
             sResourceExtractor.waitForCompletion();
 
             List<String> shellArgs = new ArrayList<>();
-            shellArgs.add("--icu-data-file-path=" +
-                new File(PathUtils.getDataDirectory(applicationContext), "icudtl.dat"));
+            shellArgs.add("--icu-data-file-path=" + sIcuDataPath);
             if (args != null) {
                 Collections.addAll(shellArgs, args);
             }
-            if (sIsPrecompiled) {
-                shellArgs.add("--" + AOT_SNAPSHOT_PATH_KEY + "=" +
-                    PathUtils.getDataDirectory(applicationContext));
+            if (sIsPrecompiledAsSharedLibrary) {
+                shellArgs.add("--" + AOT_SHARED_LIBRARY_PATH + "=" +
+                    new File(PathUtils.getDataDirectory(applicationContext), sAotSharedLibraryPath));
+            } else {
+                if (sIsPrecompiledAsBlobs) {
+                    shellArgs.add("--" + AOT_SNAPSHOT_PATH_KEY + "=" +
+                        PathUtils.getDataDirectory(applicationContext));
+                } else {
+                    shellArgs.add("--cache-dir-path=" +
+                        PathUtils.getCacheDirectory(applicationContext));
+
+                    shellArgs.add("--" + AOT_SNAPSHOT_PATH_KEY + "=" +
+                        PathUtils.getDataDirectory(applicationContext) + "/" + sFlutterAssetsDir);
+                }
                 shellArgs.add("--" + AOT_VM_SNAPSHOT_DATA_KEY + "=" + sAotVmSnapshotData);
                 shellArgs.add("--" + AOT_VM_SNAPSHOT_INSTR_KEY + "=" + sAotVmSnapshotInstr);
                 shellArgs.add("--" + AOT_ISOLATE_SNAPSHOT_DATA_KEY + "=" + sAotIsolateSnapshotData);
                 shellArgs.add("--" + AOT_ISOLATE_SNAPSHOT_INSTR_KEY + "=" + sAotIsolateSnapshotInstr);
-            } else if (sIsPrecompiledAsSharedLibrary) {
-                shellArgs.add("--" + AOT_SHARED_LIBRARY_PATH + "=" +
-                    new File(PathUtils.getDataDirectory(applicationContext), sAotSharedLibraryPath));
-            } else {
-                shellArgs.add("--cache-dir-path=" +
-                    PathUtils.getCacheDirectory(applicationContext));
             }
 
             if (sSettings.getLogTag() != null) {
@@ -260,10 +258,28 @@ public class FlutterMain {
     private static void initResources(Context applicationContext) {
         Context context = applicationContext;
         new ResourceCleaner(context).start();
-        sResourceExtractor = new ResourceExtractor(context)
-            .addResources(SKY_RESOURCES)
+
+        sResourceExtractor = new ResourceExtractor(context);
+
+        // Search for the icudtl.dat file at the old and new locations.
+        // TODO(jsimmons): remove the old location when all tools have been updated.
+        Set<String> sharedAssets = listAssets(applicationContext, SHARED_ASSET_DIR);
+        String icuAssetPath;
+        if (sharedAssets.contains(SHARED_ASSET_ICU_DATA)) {
+          icuAssetPath = SHARED_ASSET_DIR + File.separator + SHARED_ASSET_ICU_DATA;
+        } else {
+          icuAssetPath = SHARED_ASSET_ICU_DATA;
+        }
+        sResourceExtractor.addResource(icuAssetPath);
+        sIcuDataPath = PathUtils.getDataDirectory(applicationContext) + File.separator + icuAssetPath;
+
+        sResourceExtractor
             .addResource(fromFlutterAssets(sFlx))
             .addResource(fromFlutterAssets(sSnapshotBlob))
+            .addResource(fromFlutterAssets(sAotVmSnapshotData))
+            .addResource(fromFlutterAssets(sAotVmSnapshotInstr))
+            .addResource(fromFlutterAssets(sAotIsolateSnapshotData))
+            .addResource(fromFlutterAssets(sAotIsolateSnapshotInstr))
             .addResource(fromFlutterAssets(DEFAULT_KERNEL_BLOB))
             .addResource(fromFlutterAssets(DEFAULT_PLATFORM_DILL));
         if (sIsPrecompiledAsSharedLibrary) {
@@ -284,11 +300,11 @@ public class FlutterMain {
      * Returns a list of the file names at the root of the application's asset
      * path.
      */
-    private static Set<String> listRootAssets(Context applicationContext) {
+    private static Set<String> listAssets(Context applicationContext, String path) {
         AssetManager manager = applicationContext.getResources().getAssets();
         try {
             return ImmutableSetBuilder.<String>newInstance()
-                .add(manager.list(""))
+                .add(manager.list(path))
                 .build();
         } catch (IOException e) {
             Log.e(TAG, "Unable to list assets", e);
@@ -297,22 +313,22 @@ public class FlutterMain {
     }
 
     private static void initAot(Context applicationContext) {
-        Set<String> assets = listRootAssets(applicationContext);
-        sIsPrecompiled = assets.containsAll(Arrays.asList(
+        Set<String> assets = listAssets(applicationContext, "");
+        sIsPrecompiledAsBlobs = assets.containsAll(Arrays.asList(
             sAotVmSnapshotData,
             sAotVmSnapshotInstr,
             sAotIsolateSnapshotData,
             sAotIsolateSnapshotInstr
         ));
         sIsPrecompiledAsSharedLibrary = assets.contains(sAotSharedLibraryPath);
-        if (sIsPrecompiled && sIsPrecompiledAsSharedLibrary) {
+        if (sIsPrecompiledAsBlobs && sIsPrecompiledAsSharedLibrary) {
           throw new RuntimeException(
               "Found precompiled app as shared library and as Dart VM snapshots.");
         }
     }
 
     public static boolean isRunningPrecompiledCode() {
-        return sIsPrecompiled || sIsPrecompiledAsSharedLibrary;
+        return sIsPrecompiledAsBlobs || sIsPrecompiledAsSharedLibrary;
     }
 
     public static String findAppBundlePath(Context applicationContext) {

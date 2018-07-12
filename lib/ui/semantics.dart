@@ -26,6 +26,7 @@ class SemanticsAction {
   static const int _kPasteIndex = 1 << 14;
   static const int _kDidGainAccessibilityFocusIndex = 1 << 15;
   static const int _kDidLoseAccessibilityFocusIndex = 1 << 16;
+  static const int _kCustomAction = 1 << 17;
 
   /// The numerical value for this action.
   ///
@@ -146,11 +147,17 @@ class SemanticsAction {
   /// Accessibility focus and input focus can be held by two different nodes!
   static const SemanticsAction didLoseAccessibilityFocus = const SemanticsAction._(_kDidLoseAccessibilityFocusIndex);
 
+  /// Indicates that the user has invoked a custom accessibility action.
+  /// 
+  /// This handler is added automatically whenever a custom accessibility
+  /// action is added to a semantics node.
+  static const SemanticsAction customAction = const SemanticsAction._(_kCustomAction);
+
   /// The possible semantics actions.
   ///
   /// The map's key is the [index] of the action and the value is the action
   /// itself.
-  static final Map<int, SemanticsAction> values = const <int, SemanticsAction>{
+  static const Map<int, SemanticsAction> values = const <int, SemanticsAction>{
     _kTapIndex: tap,
     _kLongPressIndex: longPress,
     _kScrollLeftIndex: scrollLeft,
@@ -168,6 +175,7 @@ class SemanticsAction {
     _kPasteIndex: paste,
     _kDidGainAccessibilityFocusIndex: didGainAccessibilityFocus,
     _kDidLoseAccessibilityFocusIndex: didLoseAccessibilityFocus,
+    _kCustomAction: customAction,
   };
 
   @override
@@ -207,6 +215,8 @@ class SemanticsAction {
         return 'SemanticsAction.didGainAccessibilityFocus';
       case _kDidLoseAccessibilityFocusIndex:
         return 'SemanticsAction.didLoseAccessibilityFocus';
+      case _kCustomAction:
+        return 'SemanticsAction.customAction';
     }
     return null;
   }
@@ -369,7 +379,7 @@ class SemanticsFlag {
   /// The possible semantics flags.
   ///
   /// The map's key is the [index] of the flag and the value is the flag itself.
-  static final Map<int, SemanticsFlag> values = const <int, SemanticsFlag>{
+  static const Map<int, SemanticsFlag> values = const <int, SemanticsFlag>{
     _kHasCheckedStateIndex: hasCheckedState,
     _kIsCheckedIndex: isChecked,
     _kIsSelectedIndex: isSelected,
@@ -434,11 +444,18 @@ class SemanticsUpdateBuilder extends NativeFieldWrapperClass2 {
   /// Update the information associated with the node with the given `id`.
   ///
   /// The semantics nodes form a tree, with the root of the tree always having
-  /// an id of zero. The `children` are the ids of the nodes that are immediate
-  /// children of this node. The system retains the nodes that are currently
-  /// reachable from the root. A given update need not contain information for
-  /// nodes that do not change in the update. If a node is not reachable from
-  /// the root after an update, the node will be discarded from the tree.
+  /// an id of zero. The `childrenInTraversalOrder` and `childrenInHitTestOrder`
+  /// are the ids of the nodes that are immediate children of this node. The
+  /// former enumerates children in traversal order, and the latter enumerates
+  /// the same children in the hit test order. The two lists must have the same
+  /// length and contain the same ids. They may only differ in the order the
+  /// ids are listed in. For more information about different child orders, see
+  /// [DebugSemanticsDumpOrder].
+  ///
+  /// The system retains the nodes that are currently reachable from the root.
+  /// A given update need not contain information for nodes that do not change
+  /// in the update. If a node is not reachable from the root after an update,
+  /// the node will be discarded from the tree.
   ///
   /// The `flags` are a bit field of [SemanticsFlag]s that apply to this node.
   ///
@@ -488,33 +505,37 @@ class SemanticsUpdateBuilder extends NativeFieldWrapperClass2 {
     String increasedValue,
     String decreasedValue,
     TextDirection textDirection,
-    int hitTestPosition,
     Float64List transform,
-    Int32List children,
+    Int32List childrenInTraversalOrder,
+    Int32List childrenInHitTestOrder,
+    Int32List customAcccessibilityActions,
   }) {
     if (transform.length != 16)
       throw new ArgumentError('transform argument must have 16 entries.');
-    _updateNode(id,
-                flags,
-                actions,
-                textSelectionBase,
-                textSelectionExtent,
-                scrollPosition,
-                scrollExtentMax,
-                scrollExtentMin,
-                rect.left,
-                rect.top,
-                rect.right,
-                rect.bottom,
-                label,
-                hint,
-                value,
-                increasedValue,
-                decreasedValue,
-                textDirection != null ? textDirection.index + 1 : 0,
-                hitTestPosition,
-                transform,
-                children,);
+    _updateNode(
+      id,
+      flags,
+      actions,
+      textSelectionBase,
+      textSelectionExtent,
+      scrollPosition,
+      scrollExtentMax,
+      scrollExtentMin,
+      rect.left,
+      rect.top,
+      rect.right,
+      rect.bottom,
+      label,
+      hint,
+      value,
+      increasedValue,
+      decreasedValue,
+      textDirection != null ? textDirection.index + 1 : 0,
+      transform,
+      childrenInTraversalOrder,
+      childrenInHitTestOrder,
+      customAcccessibilityActions,
+    );
   }
   void _updateNode(
     int id,
@@ -535,10 +556,22 @@ class SemanticsUpdateBuilder extends NativeFieldWrapperClass2 {
     String increasedValue,
     String decreasedValue,
     int textDirection,
-    int hitTestPosition,
     Float64List transform,
-    Int32List children,
+    Int32List childrenInTraversalOrder,
+    Int32List childrenInHitTestOrder,
+    Int32List customAcccessibilityActions,
   ) native 'SemanticsUpdateBuilder_updateNode';
+
+  /// Update the custom accessibility action associated with the given `id`.
+  /// 
+  /// The name of the action exposed to the user is the `label`. The text 
+  /// direction of this label is the same as the global window.
+  void updateCustomAction({int id, String label}) {
+    assert(id != null);
+    assert(label != null && label != '');
+    _updateCustomAction(id, label);
+  }
+  void _updateCustomAction(int id, String label) native 'SemanticsUpdateBuilder_updateAction';
 
   /// Creates a [SemanticsUpdate] object that encapsulates the updates recorded
   /// by this object.
